@@ -3,4 +3,4 @@ requests
 yt-dlp
 flask
 gunicorn
-   google-generativeai
+google-generativeai
