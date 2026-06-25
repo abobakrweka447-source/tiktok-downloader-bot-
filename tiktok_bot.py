@@ -1956,25 +1956,29 @@ def _heartbeat_thread():
     t = threading.Thread(target=_beat, daemon=True)
     t.start()
 
-@bot.message_handler(commands=['ai'])
-def ai_command(message):
+@bot.message_handler(func=lambda message: True)
+def handle_all_messages(message):
     if not GEMINI_KEY:
-        bot.reply_to(message, "الـ AI مش متفعل لسه")
-        return
-        
-    user_text = message.text.replace('/ai', '').strip()
-    if not user_text:
-        bot.reply_to(message, "اكتب سؤالك بعد /ai يا نجم")
+        bot.reply_to(message, "المطور نسي يحط مفتاح Gemini 😅")
         return
     
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        prompt = f"جاوب بالمصري العامي باختصار على: {user_text}"
-        response = gemini_model.generate_content(prompt)
+        
+        system_prompt = """انت مساعد ذكي في بوت تليجرام. 
+        لو المستخدم بعت لينك فيديو من تيك توك او انستجرام او يوتيوب:
+        1. قوله ده فيديو من منصة كذا
+        2. اسأله: عايز احملهولك؟ ولا اشرحلك محتواه؟ ولا استخرج النص اللي فيه؟
+        3. استنى رده ومتعملش حاجة من نفسك
+        لو بعت كلام عادي رد عليه رد طبيعي ذكي ومفيد.
+        خليك مصري وردك خفيف."""
+        
+        full_prompt = f"{system_prompt}\n\nرسالة المستخدم: {message.text}"
+        response = gemini_model.generate_content(full_prompt)
         bot.reply_to(message, response.text)
+        
     except Exception as e:
-        log.error(f"Gemini Error: {e}")
-        bot.reply_to(message, "الـ AI معلق دلوقتي جرب تاني")
+        bot.reply_to(message, f"دماغي ساحت 😵‍💫 جرب تاني")
 if __name__ == "__main__":
     if not shutil.which("ffmpeg"):
         print(
