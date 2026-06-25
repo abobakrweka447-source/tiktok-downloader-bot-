@@ -11,7 +11,12 @@ import traceback
 import telebot
 from telebot import types
 import requests
+import google.generativeai as genai
 
+GEMINI_KEY = os.environ.get("tiktok_downloader_api_key")
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -1951,7 +1956,25 @@ def _heartbeat_thread():
     t = threading.Thread(target=_beat, daemon=True)
     t.start()
 
-
+@bot.message_handler(commands=['ai'])
+def ai_command(message):
+    if not GEMINI_KEY:
+        bot.reply_to(message, "الـ AI مش متفعل لسه")
+        return
+        
+    user_text = message.text.replace('/ai', '').strip()
+    if not user_text:
+        bot.reply_to(message, "اكتب سؤالك بعد /ai يا نجم")
+        return
+    
+    try:
+        bot.send_chat_action(message.chat.id, 'typing')
+        prompt = f"جاوب بالمصري العامي باختصار على: {user_text}"
+        response = gemini_model.generate_content(prompt)
+        bot.reply_to(message, response.text)
+    except Exception as e:
+        log.error(f"Gemini Error: {e}")
+        bot.reply_to(message, "الـ AI معلق دلوقتي جرب تاني")
 if __name__ == "__main__":
     if not shutil.which("ffmpeg"):
         print(
