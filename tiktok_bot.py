@@ -1956,29 +1956,52 @@ def _heartbeat_thread():
     t = threading.Thread(target=_beat, daemon=True)
     t.start()
 
+# ===== كود الـ AI Agent الصح =====
+user_context = {}
+
 @bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
-    if not GEMINI_KEY:
-        bot.reply_to(message, "المطور نسي يحط مفتاح Gemini 😅")
-        return
-    
+def ai_agent_final(message):
+    global user_context
+    user_id = message.from_user.id
+    text = message.text.lower()
+
+    # لو لينك: خزنه وسيب البوت القديم يتعامل
+    if any(x in text for x in ['tiktok.com', 'youtu', 'instagram.com', 'facebook.com', 'http']):
+        user_context[user_id] = {'last_link': message.text}
+        return # مهم: سيب الهاندلرز القديمة تشتغل
+
+    # لو كلام عادي: AI ينفذ
+    if not GEMINI_KEY: return
+
     try:
         bot.send_chat_action(message.chat.id, 'typing')
-        
-        system_prompt = """انت مساعد ذكي في بوت تليجرام. 
-        لو المستخدم بعت لينك فيديو من تيك توك او انستجرام او يوتيوب:
-        1. قوله ده فيديو من منصة كذا
-        2. اسأله: عايز احملهولك؟ ولا اشرحلك محتواه؟ ولا استخرج النص اللي فيه؟
-        3. استنى رده ومتعملش حاجة من نفسك
-        لو بعت كلام عادي رد عليه رد طبيعي ذكي ومفيد.
-        خليك مصري وردك خفيف."""
-        
-        full_prompt = f"{system_prompt}\n\nرسالة المستخدم: {message.text}"
-        response = gemini_model.generate_content(full_prompt)
-        bot.reply_to(message, response.text)
-        
-    except Exception as e:
-        bot.reply_to(message, f"دماغي ساحت 😵‍💫 جرب تاني")
+        last_link = user_context.get(user_id, {}).get('last_link', 'مفيش')
+
+        prompt = f"""انت AI بينفذ اوامر في بوت تحميل. اخر لينك: {last_link}
+        لو طلب تحميل mp3 رد: MP3
+        لو طلب تحميل فيديو رد: VIDEO
+        لو طلب شرح رد: EXPLAIN
+        غير كده رد عادي. المستخدم قال: {message.text}"""
+
+        action = gemini_model.generate_content(prompt).text.strip()
+
+        if action == "MP3" and last_link!= 'مفيش':
+            bot.reply_to(message, "بحمل الصوت...")
+            message.text = last_link
+            bot.process_new_messages([message])
+
+        elif action == "VIDEO" and last_link!= 'مفيش':
+            bot.reply_to(message, "بحمل الفيديو...")
+            message.text = last_link
+            bot.process_new_messages([message])
+
+        elif action == "EXPLAIN":
+            bot.reply_to(message, f"اللينك: {last_link}")
+        else:
+            bot.reply_to(message, action)
+
+    except: pass
+# ===== نهاية كود الـ AI =====
 if __name__ == "__main__":
     if not shutil.which("ffmpeg"):
         print(
