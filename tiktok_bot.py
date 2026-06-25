@@ -1957,51 +1957,48 @@ def _heartbeat_thread():
     t.start()
 
 # ===== كود الـ AI Agent الصح =====
-user_context = {}
 
-@bot.message_handler(func=lambda message: True)
-def ai_agent_final(message):
-    global user_context
-    user_id = message.from_user.id
-    text = message.text.lower()
+AI_USER_CONTEXT = {}
 
-    # لو لينك: خزنه وسيب البوت القديم يتعامل
-    if any(x in text for x in ['tiktok.com', 'youtu', 'instagram.com', 'facebook.com', 'http']):
-        user_context[user_id] = {'last_link': message.text}
-        return # مهم: سيب الهاندلرز القديمة تشتغل
-
-    # لو كلام عادي: AI ينفذ
+@bot.message_handler(func=lambda m: m.text and not URL_REGEX.search(m.text), content_types=['text'])
+def ai_smart_handler(message):
+    """ده بيشتغل بس على الكلام العادي، مش اللينكات"""
     if not GEMINI_KEY: return
-
     try:
+        user_id = message.from_user.id
         bot.send_chat_action(message.chat.id, 'typing')
-        last_link = user_context.get(user_id, {}).get('last_link', 'مفيش')
-
-        prompt = f"""انت AI بينفذ اوامر في بوت تحميل. اخر لينك: {last_link}
-        لو طلب تحميل mp3 رد: MP3
+        last_link = AI_USER_CONTEXT.get(user_id, {}).get('last_link', 'مفيش')
+        
+        prompt = f"""انت AI في بوت تحميل. اخر لينك محفوظ: {last_link}
+        المستخدم قال: {message.text}
+        لو طلب تحميل صوت/MP3 رد: MP3
         لو طلب تحميل فيديو رد: VIDEO
-        لو طلب شرح رد: EXPLAIN
-        غير كده رد عادي. المستخدم قال: {message.text}"""
-
+        لو طلب شرح للينك رد: EXPLAIN
+        غير كده رد رد مصري عادي قصير"""
+        
         action = gemini_model.generate_content(prompt).text.strip()
-
-        if action == "MP3" and last_link!= 'مفيش':
+        
+        if action == "MP3" and last_link != 'مفيش':
             bot.reply_to(message, "بحمل الصوت...")
             message.text = last_link
-            bot.process_new_messages([message])
-
-        elif action == "VIDEO" and last_link!= 'مفيش':
+            handle_mp3_command(message)
+        elif action == "VIDEO" and last_link != 'مفيش':
             bot.reply_to(message, "بحمل الفيديو...")
             message.text = last_link
-            bot.process_new_messages([message])
-
+            handle_link(message)
         elif action == "EXPLAIN":
             bot.reply_to(message, f"اللينك: {last_link}")
         else:
             bot.reply_to(message, action)
-
     except: pass
-# ===== نهاية كود الـ AI =====
+
+# خزن اي لينك يتبعت
+@bot.message_handler(func=lambda m: m.text and URL_REGEX.search(m.text), content_types=['text'])
+def save_link_handler(message):
+    """ده بيخزن اي لينك وبعدين يسيب كودك القديم يحمله"""
+    AI_USER_CONTEXT[message.from_user.id] = {'last_link': message.text.strip()}
+    # سيب الهاندلر القديم بتاعك يكمل شغله عادي
+# ===== خلاص كده =====
 if __name__ == "__main__":
     if not shutil.which("ffmpeg"):
         print(
