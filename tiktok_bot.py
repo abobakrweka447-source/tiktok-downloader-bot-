@@ -1094,6 +1094,49 @@ def process_video_compressed(chat_id, status_message_id, url, platform, meta=Non
         chat_id,
         status_message_id,
         f"🎯 منصة: {platform}\n⏳ جاري التحميل بجودة {quality_label}...",
+        # ===== AI Agent - حطه هنا قبل handle_link =====
+AI_USER_CONTEXT = {}
+
+@bot.message_handler(func=lambda m: m.text and not URL_REGEX.search(m.text), content_types=['text'])
+def ai_smart_handler(message):
+    """بيرد على الكلام العادي بالـ AI"""
+    if not GEMINI_KEY: return
+    try:
+        user_id = message.from_user.id
+        bot.send_chat_action(message.chat.id, 'typing')
+        last_link = AI_USER_CONTEXT.get(user_id, {}).get('last_link', 'مفيش')
+        
+        prompt = f"""انت AI في بوت تحميل. اخر لينك محفوظ: {last_link}
+        المستخدم قال: {message.text}
+        لو طلب تحميل صوت/MP3 رد: MP3
+        لو طلب تحميل فيديو رد: VIDEO
+        لو طلب شرح للينك رد: EXPLAIN
+        غير كده رد رد مصري عادي قصير"""
+        
+        action = gemini_model.generate_content(prompt).text.strip()
+        
+        if action == "MP3" and last_link != 'مفيش':
+            bot.reply_to(message, "بحمل الصوت...")
+            message.text = last_link
+            handle_mp3_command(message)
+        elif action == "VIDEO" and last_link != 'مفيش':
+            bot.reply_to(message, "بحمل الفيديو...")
+            message.text = last_link
+            handle_link(message)
+        elif action == "EXPLAIN":
+            bot.reply_to(message, f"اللينك: {last_link}")
+        else:
+            bot.reply_to(message, action)
+    except Exception as e:
+        log.error(f"AI error: {e}")
+
+@bot.message_handler(func=lambda m: m.text and URL_REGEX.search(m.text), content_types=['text'])
+def save_link_handler(message):
+    """بيخزن اللينك عشان الـ AI يستخدمه"""
+    AI_USER_CONTEXT[message.from_user.id] = {'last_link': message.text.strip()}
+    # متعملش return - سيب handle_link اللي تحت يشتغل
+# ===== نهاية كود AI =====
+
     )
     try:
         ok, free = check_disk_space()
